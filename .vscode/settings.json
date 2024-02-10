@@ -1,0 +1,7 @@
+{
+	"files.associations": {
+		"freertos.h": "c",
+		"esp_chip_info.h": "c",
+		"task.h": "c"
+	}
+}
