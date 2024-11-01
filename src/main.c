@@ -1,78 +1,65 @@
-/*
-* SPDX-FileCopyrightText: 2010-2022 Espressif Systems (Shanghai) CO LTD
-*
-* SPDX-License-Identifier: CC0-1.0
-*/
-
 #include <stdio.h>
 #include <inttypes.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_chip_info.h"
-#include "esp_sleep.h"
-#include "esp_console.h"
-#include "esp_system.h"
+#include "esp_flash.h"
 #include "driver/gpio.h"
+#define NUMPINS 10
 
-#define TASK_NAME_BUFFER_SIZE 20
-#define NUM_INTERVALS 3
+void task(void * params) {
+    printf("task called\n");
+  int* data = (int*) params;
+  int pin = data[0];
+  int hl = data[1];
+  int ll = data[2];
+  gpio_reset_pin(pin);
+  gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+  for(;;){ // infinite loop
+    printf("loop\n");
+    gpio_set_level(pin, 1);
+    vTaskDelay(hl / portTICK_PERIOD_MS);
+    printf("setting to 0\n");
+    gpio_set_level(pin, 0);
+    vTaskDelay(ll / portTICK_PERIOD_MS);
+    fflush(stdout);
+    }
+}
+TaskHandle_t taskHandles[NUMPINS];
 
-// maps task numbers to which pin they control
-const gpio_num_t pin_lookup[] = {
-	GPIO_NUM_26,
-	GPIO_NUM_14,
-	GPIO_NUM_33
-};
-
-struct IntervalTimerArgs {
-	char name[TASK_NAME_BUFFER_SIZE];
-	TickType_t on_time;
-	TickType_t total_time;
-	gpio_num_t pin_num;
-};
-
-void interval_timer_task(void *interval_timer_args) {
-	struct IntervalTimerArgs *args = (struct IntervalTimerArgs *)interval_timer_args;
-	printf("Hello world! I'm %s.\n", args->name);
-
-	gpio_reset_pin(args->pin_num);
-	gpio_set_direction(args->pin_num, GPIO_MODE_OUTPUT);
-
-	TickType_t last_wake_time = xTaskGetTickCount();
-	while (true) {
-		printf("%s timer went off! Turning pin ON\n", args->name);
-		gpio_set_level(args->pin_num, 1);
-		vTaskDelayUntil(&last_wake_time, args->on_time);
-		printf("%s timer went off! Turning pin OFF\n", args->name);
-		gpio_set_level(args->pin_num, 0);
-		vTaskDelayUntil(&last_wake_time, args->total_time - args->on_time);
-	}
+void createPinTimer(int pin, int high_length, int low_length) {
+  int params[3] = {pin, high_length, low_length};
+  TaskHandle_t xHandle = NULL;
+  taskHandles[pin] = xHandle;
+  //void (*t) (void*) = task;
+  xTaskCreate(
+    task,// Function that should be called
+    "timer",   // Name of the task (for debugging)
+    1000,            // Stack size (bytes)
+    params,            // Parameter to pass
+    1,              // Task priority
+    &taskHandles[pin]            // Task handle
+  );
 }
 
-void app_main(void) {
-	printf("Hello world!\n");
-	struct IntervalTimerArgs *tasks = malloc(NUM_INTERVALS * sizeof(struct IntervalTimerArgs));
-	if (tasks == NULL) {
-		printf("couldn't allocate memory for task structs\n");
-		exit(1);
-	}
-	for (int i = 0; i < NUM_INTERVALS; ++i) {
-		sprintf(tasks[i].name, "Interval #%d", i);
-		tasks[i].total_time = (i + 1) * 500 / portTICK_PERIOD_MS;
-		tasks[i].on_time = 100 / portTICK_PERIOD_MS;
-		tasks[i].pin_num = pin_lookup[i];
-		if (xTaskCreate(&interval_timer_task, tasks[i].name, 2048, &tasks[i], 1, NULL)) {
-			printf("created task #%d successfully!\n", i);
-		} else {
-			printf("task #%d could not be created\n", i);
-		}
-	}
-	printf("Y'all should be set up now. Good night.\n");
+void vTaskDelete( TaskHandle_t xTask );
 
-	// set up the repl
-	// esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-	// esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-	// esp_console_repl_t *repl = NULL;
-	// esp_console_new_repl_uart(&hw_config, &repl_config, &repl);
+void destroyPinTimer(int pin) {
+    printf("\ndestroying task\n");
+    vTaskDelete(taskHandles[pin]);
+}
+
+void app_main(void)
+{
+    int pin = GPIO_NUM_4;
+    printf("A");
+   createPinTimer(pin, 50, 950);
+   printf("B");
+   for (;;) {
+    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    destroyPinTimer(pin);
+    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    createPinTimer(pin, 50, 950);
+   }
 }
