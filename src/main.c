@@ -8,12 +8,14 @@
 #include "driver/gpio.h"
 #define NUMPINS 30
 
+// Parameter structure for task
 typedef struct {
   int pin;
   int highLength;
   int lowLength;
 } TaskParams;
 
+// Turns on and off a pin at a specified interval
 void task(void * params) {
   TaskParams* p = (TaskParams*) params;
   //gpio_reset_pin(pin);
@@ -26,9 +28,20 @@ void task(void * params) {
     fflush(stdout);
     }
 }
-TaskHandle_t taskHandles[NUMPINS];
+// Stores the task handles for the timers
+TaskHandle_t taskHandles[NUMPINS] = {NULL};
 
+void vTaskDelete( TaskHandle_t xTask );
+
+// Takes in a pin number and destroys the timer associated with that pin
+void destroyPinTimer(int pin) {
+    printf("\ndestroying task\n");
+    if (taskHandles[pin] != NULL) {vTaskDelete(taskHandles[pin]);}
+}
+
+// Takes in a pin number and two interval lengths and creates a timer
 void createPinTimer(int pin, int highLength, int lowLength) {
+  destroyPinTimer(pin);
   TaskParams* params = (TaskParams *) malloc(sizeof(TaskParams));
   params->pin = pin;
   params->highLength = highLength;
@@ -44,22 +57,13 @@ void createPinTimer(int pin, int highLength, int lowLength) {
   );
 }
 
-void vTaskDelete( TaskHandle_t xTask );
-
-void destroyPinTimer(int pin) {
-    printf("\ndestroying task\n");
-    vTaskDelete(taskHandles[pin]);
-}
 
 void app_main(void)
 {
   int pin1 = GPIO_NUM_25;
   int pin2 = GPIO_NUM_27;
   createPinTimer(pin1, 50, 950);
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
-  createPinTimer(pin2, 50, 450);
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
-  destroyPinTimer(pin1);
-  vTaskDelay(2000 / portTICK_PERIOD_MS);
+  vTaskDelay(2500 / portTICK_PERIOD_MS);
   createPinTimer(pin1, 50, 450);
+
 }
